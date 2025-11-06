@@ -1,9 +1,4 @@
-use std::{
-    ffi::OsStr,
-    fmt, io,
-    os::unix::ffi::OsStrExt,
-    path::{Path, PathBuf},
-};
+use std::{ffi::OsString, path::Path};
 
 struct Parents<'a> {
     current: Option<&'a Path>,
@@ -31,84 +26,25 @@ impl<'a> Child<'a> for Path {
     }
 }
 
-#[derive(Debug)]
-pub struct ReadDirErr(pub io::Error);
-
-impl fmt::Display for ReadDirErr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
+pub struct OsStrConversionFail {
+    pub original_string: OsString,
 }
 
-#[derive(Debug)]
-pub struct DirEntryErr(io::Error);
-
-impl fmt::Display for DirEntryErr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
-    }
-}
-
-fn match_full_paths_on_directory_entries(
-    directory: PathBuf,
-    filename_to_match: &OsStr,
-    prefix_match: bool,
-) -> Result<impl Iterator<Item = Result<PathBuf, DirEntryErr>>, ReadDirErr> {
-    // eprintln!("Reading directory: {}", directory.display());
-    Ok(directory
-        .read_dir()
-        .map_err(ReadDirErr)?
-        .filter_map(move |dir_entry| {
-            dir_entry
-                .map_err(DirEntryErr)
-                .map(|dir_entry| {
-                    let filename_to_match_bytes = filename_to_match.as_bytes();
-                    let entry_filename = dir_entry.file_name();
-                    // eprintln!(
-                    //     "Matching {} against {}",
-                    //     filename_to_match.display(),
-                    //     entry_filename.display()
-                    // );
-                    let entry_filename_bytes = entry_filename.as_bytes();
-                    let is_match = if prefix_match {
-                        entry_filename_bytes.starts_with(filename_to_match_bytes)
-                    } else {
-                        entry_filename_bytes == filename_to_match_bytes
-                    };
-                    if is_match {
-                        // eprintln!("Match!");
-                        return Some(dir_entry.path());
-                    }
-
-                    None
-                })
-                .transpose()
-        }))
-}
-
-pub fn match_sub_paths_up_from_starting_directory<P>(
+pub fn iter<P>(
     starting_directory: &Path,
     sub_paths_to_match: &[P],
-    prefix_match: bool,
-) -> impl Iterator<Item = Result<impl Iterator<Item = Result<PathBuf, DirEntryErr>>, ReadDirErr>>
+) -> impl Iterator<Item = Result<Result<glob::Paths, glob::PatternError>, OsStrConversionFail>>
 where
     P: AsRef<Path>,
 {
-    sub_paths_to_match.iter().flat_map(move |path_to_match| {
-        starting_directory.parents().filter_map(move |directory| {
-            let path = path_to_match.as_ref();
-            let filename = path.file_name();
-            // dbg!(&filename);
-            let parent = path.parent();
-            // dbg!(&parent);
-            let directory = directory.join(parent?);
-            Some(match_full_paths_on_directory_entries(
-                directory,
-                filename?,
-                prefix_match,
-            ))
+    starting_directory.parents().flat_map(move |directory| {
+        sub_paths_to_match.iter().map(|p| {
+            let full_path = directory.join(p);
+            let os_str = full_path.as_os_str();
+            let string = os_str.to_str().ok_or_else(|| OsStrConversionFail {
+                original_string: os_str.to_os_string(),
+            });
+            string.map(glob::glob)
         })
     })
 }
-
-pub use match_sub_paths_up_from_starting_directory as iter;
