@@ -19,8 +19,12 @@ fn main() {
         let path_matches = match res {
             Ok(path_matches) => path_matches,
             Err(e) => {
+                if e.0.kind() == std::io::ErrorKind::NotFound {
+                    continue;
+                }
+
                 eprintln!("failed to read a directory: {e}");
-                return;
+                continue;
             }
         };
 

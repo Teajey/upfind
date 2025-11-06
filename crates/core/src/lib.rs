@@ -1,4 +1,5 @@
 use std::{
+    ffi::OsStr,
     fmt, io,
     os::unix::ffi::OsStrExt,
     path::{Path, PathBuf},
@@ -31,7 +32,7 @@ impl<'a> Child<'a> for Path {
 }
 
 #[derive(Debug)]
-pub struct ReadDirErr(io::Error);
+pub struct ReadDirErr(pub io::Error);
 
 impl fmt::Display for ReadDirErr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -49,10 +50,11 @@ impl fmt::Display for DirEntryErr {
 }
 
 fn match_full_paths_on_directory_entries(
-    directory: &Path,
-    full_paths_to_match: Vec<PathBuf>,
+    directory: PathBuf,
+    filename_to_match: &OsStr,
     prefix_match: bool,
 ) -> Result<impl Iterator<Item = Result<PathBuf, DirEntryErr>>, ReadDirErr> {
+    // eprintln!("Reading directory: {}", directory.display());
     Ok(directory
         .read_dir()
         .map_err(ReadDirErr)?
@@ -60,24 +62,22 @@ fn match_full_paths_on_directory_entries(
             dir_entry
                 .map_err(DirEntryErr)
                 .map(|dir_entry| {
-                    for path_to_match in &full_paths_to_match {
-                        let path_to_match_bytes = path_to_match.as_os_str().as_bytes();
-                        let entry_path = dir_entry.path();
-                        eprintln!(
-                            "Matching {} against {}",
-                            path_to_match.display(),
-                            entry_path.display()
-                        );
-                        let entry_bytes = entry_path.as_os_str().as_bytes();
-                        let is_match = if prefix_match {
-                            entry_bytes.starts_with(path_to_match_bytes)
-                        } else {
-                            entry_bytes == path_to_match_bytes
-                        };
-                        if is_match {
-                            eprintln!("Match!",);
-                            return Some(entry_path);
-                        }
+                    let filename_to_match_bytes = filename_to_match.as_bytes();
+                    let entry_filename = dir_entry.file_name();
+                    // eprintln!(
+                    //     "Matching {} against {}",
+                    //     filename_to_match.display(),
+                    //     entry_filename.display()
+                    // );
+                    let entry_filename_bytes = entry_filename.as_bytes();
+                    let is_match = if prefix_match {
+                        entry_filename_bytes.starts_with(filename_to_match_bytes)
+                    } else {
+                        entry_filename_bytes == filename_to_match_bytes
+                    };
+                    if is_match {
+                        // eprintln!("Match!");
+                        return Some(dir_entry.path());
                     }
 
                     None
@@ -94,12 +94,20 @@ pub fn match_sub_paths_up_from_starting_directory<P>(
 where
     P: AsRef<Path>,
 {
-    starting_directory.parents().map(move |directory| {
-        let full_paths_to_match = sub_paths_to_match
-            .iter()
-            .map(|p| directory.join(p.as_ref()))
-            .collect::<Vec<_>>();
-        match_full_paths_on_directory_entries(directory, full_paths_to_match, prefix_match)
+    sub_paths_to_match.iter().flat_map(move |path_to_match| {
+        starting_directory.parents().filter_map(move |directory| {
+            let path = path_to_match.as_ref();
+            let filename = path.file_name();
+            // dbg!(&filename);
+            let parent = path.parent();
+            // dbg!(&parent);
+            let directory = directory.join(parent?);
+            Some(match_full_paths_on_directory_entries(
+                directory,
+                filename?,
+                prefix_match,
+            ))
+        })
     })
 }
 
