@@ -13,14 +13,14 @@ fn main() {
 
     let starting_directory = std::env::current_dir().expect("cwd");
 
-    for res in truff::iter(&starting_directory, &args.paths) {
+    for res in upfind::iter(&starting_directory, &args.paths) {
         let path_matches = match res {
             Ok(path_matches) => path_matches,
-            Err(truff::Error::Pattern(e)) => {
+            Err(upfind::Error::Pattern(e)) => {
                 eprintln!("encountered a pattern error: {e}");
                 continue;
             }
-            Err(truff::Error::OsStrConversionFail { original_string }) => {
+            Err(upfind::Error::OsStrConversionFail { original_string }) => {
                 eprintln!("failed to parse {} as UTF-8", original_string.display());
                 continue;
             }
