@@ -15,13 +15,13 @@ fn main() {
 
     for res in truff::iter(&starting_directory, &args.paths) {
         let path_matches = match res {
-            Ok(Ok(path_matches)) => path_matches,
-            Ok(Err(e)) => {
+            Ok(path_matches) => path_matches,
+            Err(truff::Error::Pattern(e)) => {
                 eprintln!("encountered a pattern error: {e}");
                 continue;
             }
-            Err(e) => {
-                eprintln!("failed to parse {} as UTF-8", e.original_string.display());
+            Err(truff::Error::OsStrConversionFail { original_string }) => {
+                eprintln!("failed to parse {} as UTF-8", original_string.display());
                 continue;
             }
         };
