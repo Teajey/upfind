@@ -16,12 +16,8 @@ fn main() {
     for res in upfind::iter(&starting_directory, &args.paths) {
         let path_matches = match res {
             Ok(path_matches) => path_matches,
-            Err(upfind::Error::Pattern(e)) => {
-                eprintln!("encountered a pattern error: {e}");
-                continue;
-            }
-            Err(upfind::Error::OsStrConversionFail { original_string }) => {
-                eprintln!("failed to parse {} as UTF-8", original_string.display());
+            Err(e) => {
+                eprintln!("{e}");
                 continue;
             }
         };
