@@ -30,6 +30,7 @@ impl<'a> Child<'a> for Path {
     }
 }
 
+#[derive(Debug)]
 pub enum PathError {
     Utf8ConversionFail { original_string: OsString },
     GlobPattern(glob::PatternError),
