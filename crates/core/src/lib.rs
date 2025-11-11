@@ -36,6 +36,8 @@ pub enum PathError {
     GlobPattern(glob::PatternError),
 }
 
+pub use glob;
+
 impl fmt::Display for PathError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
